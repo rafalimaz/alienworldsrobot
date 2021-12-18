@@ -1,0 +1,193 @@
+const random_wait_time = (waitTime = 60000) => new Promise((resolve, reject) => {
+    setTimeout(() => {
+        return resolve();
+    }, Math.random() * waitTime);
+});
+
+const fixed_wait_time = (waitTime = 60000) => new Promise((resolve, reject) => {
+    setTimeout(() => {
+        return resolve();
+    }, waitTime);
+});
+
+const fixed_wait_time_2 = (waitTime = 2000) => new Promise((resolve, reject) => {
+    setTimeout(() => {
+        return resolve();
+    }, waitTime);
+});
+
+const wait_one_hour = (waitTime = 3600000) => new Promise((resolve, reject) => {
+    setTimeout(() => {
+        return resolve();
+    }, waitTime);
+});
+
+let lastEndCursor;
+let totalUnfollowed = 0;
+let skip = 0;
+
+function getFollowingUrl(lastEndCursor, userId, batchCount) {
+    let followingUrl = "";
+    if (lastEndCursor) {
+        console.log("Starting from last cursor: " + lastEndCursor);
+        followingUrl = `https://www.instagram.com/graphql/query/?query_hash=58712303d941c6855d4e888c5f0cd22f&variables={"id":"${userId}","include_reel":false,"fetch_mutual":false,"first":${batchCount},"after":"${lastEndCursor}"}`;
+    } else {
+        console.log("Starting from first");
+        followingUrl = `https://www.instagram.com/graphql/query/?query_hash=58712303d941c6855d4e888c5f0cd22f&variables={"id":"${userId}","include_reel":false,"fetch_mutual":false,"first":${batchCount}}`;
+    }
+    return followingUrl;
+}
+
+let skipUsers = async (batchCount, skip, edge_follow) => {
+    console.log("skipping " + batchCount + ". Skip remaining: " + skip);
+    let username = edge_follow.edges[edge_follow.edges.length - 1].node.username;
+    let scroll = document.querySelector("[href='/" + username + "/']");
+    while (!scroll) {
+        let div = document.querySelector("div[role='dialog'] > :last-child");
+        div.scrollTop += Math.random() * 700;
+        await fixed_wait_time_2();
+
+        scroll = document.querySelector("[href='/" + username + "/']");
+    }
+    scroll.scrollIntoView();
+}
+
+let getProfile = async (profileUrl, errorCount) => {
+    const profile = await fetch(profileUrl)
+                        .then(res => res.json())
+                        .then(res => {
+                            errorCount = 0;
+                            return {
+                                id: res.graphql.user.id,
+                                follow: res.graphql.user.follows_viewer
+                            };
+                        }).catch(err => {
+                            errorCount++;
+                            console.log(err);
+                            return {
+                                id: 0,
+                                follow: true,
+                                status: "error"
+                            };
+                        });
+
+    return { profile, errorCount };
+}
+
+let get_not_following = async (userId, total) => {
+    let usersNotFollowing = {},
+        batchCount = 50,
+        actuallyFetched = 0,
+        errorCount = 0;
+
+    let followingUrl = getFollowingUrl(lastEndCursor, userId, batchCount);
+
+    while (total > 0) {
+        console.log("Fetching following users...");
+        console.log(actuallyFetched);
+
+        const followingUsers = await fetch(followingUrl)
+            .then(res => res.json())
+            .then(async res => {
+                let users = localStorage.getItem("followingUsers");
+                users = !users ? {} : JSON.parse(users);
+
+                if (skip > batchCount) {
+                    skip -= batchCount;
+                    await skipUsers(batchCount, skip, res.data.user.edge_follow);
+                    return {
+                        users: users,
+                        endCursor: res.data.user.edge_follow.page_info.end_cursor
+                    };
+                }
+
+                for (const node of res.data.user.edge_follow.edges) {
+                    let profile;
+                    if (users[node.node.username]) {
+                        console.log("Fetching profile from storage: " + node.node.username);
+                        profile = users[node.node.username];
+                    } else {
+                        console.log("Fetching instagram profile: " + node.node.username);
+                        const profileUrl = "https://www.instagram.com/" + node.node.username + "/?__a=1";
+                        const profileResult = await getProfile(profileUrl, errorCount);
+                        profile = profileResult.profile;
+
+                        await fixed_wait_time();
+
+                        if (profileResult.errorCount == 2) {
+                            throw new Error("Many errors when fetching profiles.");
+                        }
+
+                        errorCount = profileResult.errorCount;
+                    }
+
+                    document.querySelector("[href='/" + node.node.username + "/']").scrollIntoView();
+
+                    if (!profile.follow) {
+                        await unfollowUser(node.node.username);
+                    } else {
+                        users[node.node.username] = { id: profile.id, follow: profile.follow };
+                    }
+                }
+
+                actuallyFetched = res.data.user.edge_follow.edges.length;
+
+                return {
+                    users: users,
+                    endCursor: res.data.user.edge_follow.page_info.end_cursor
+                };
+            }).catch(err => {
+                total = -1;
+                return {
+                    users: {}
+                };
+            });
+
+        if (errorCount == 2) {
+            throw new Error("Many errors when fetching profiles.");
+        }
+
+        await random_wait_time();
+
+        console.log("Merging users");
+        usersNotFollowing = {...usersNotFollowing, ...followingUsers.users};
+        total -= actuallyFetched;
+
+        let users = localStorage.getItem("followingUsers");
+        users = !users ? {} : JSON.parse(users);
+        users = {...users, ...usersNotFollowing};
+
+        localStorage.setItem("followingUsers", JSON.stringify(users));
+
+        lastEndCursor = followingUsers.endCursor;
+        followingUrl = `https://www.instagram.com/graphql/query/?query_hash=58712303d941c6855d4e888c5f0cd22f&variables={"id":"${userId}","include_reel":false,"fetch_mutual":false,"first":${batchCount},"after":"${lastEndCursor}"}`;
+
+        console.log("total " + total);
+    }
+
+    console.log(usersNotFollowing);
+    console.log("total unfollowed: " + totalUnfollowed);
+    return usersNotFollowing;
+};
+
+let unfollowUser = async (username) => {
+    console.log("Unfollowing user: " + username);
+
+    let elem = document.querySelector("[href='/" + username + "/']");
+
+    while (elem.tagName.indexOf("LI") == -1) {
+        elem = elem.parentNode;
+    }
+
+    await fixed_wait_time();
+
+    elem.getElementsByTagName("button")[0].click();
+
+    document.getElementsByClassName('aOOlW -Cab_')[0].click();
+
+    totalUnfollowed++;
+    console.log("unfollowed " + username);
+    console.log("total unfollowed: " + totalUnfollowed);
+
+    return true;
+}
