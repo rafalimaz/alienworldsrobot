@@ -1,9 +1,11 @@
 package com.robot;
 
-import java.awt.AWTException;
-import java.awt.Robot;
+import java.awt.*;
 import java.awt.event.InputEvent;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
+
+import static java.awt.MouseInfo.getPointerInfo;
 
 /**
  * Hello world!
@@ -12,11 +14,12 @@ import java.util.Random;
 public class App
 {
 	private static Robot robot;
-	private static boolean IS_CHROME = false;
+	private static boolean IS_CHROME = true;
 	private static String MUSHROOM_FOREST = "Mushroom Forest";
 	private static String GRASSLAND = "Grassland";
 	private static String ACTIVE_VOLCANO = "Active Volcano";
 	private static String GEOTHERMAL_SPRINGS = "Geothermal Springs";
+	private static String PLAINS = "Plains";
 
     public static void main( String[] args ) throws InterruptedException, AWTException
     {
@@ -41,38 +44,42 @@ public class App
     	//String land = MUSHROOM_FOREST;
 //    	String land = "Grassland";
 //    	String land = "Active Volcano";
-    	String land = GEOTHERMAL_SPRINGS;
+//    	String land = GEOTHERMAL_SPRINGS;
+		String land = PLAINS;
 
     	//clickOnLogin();
     	while (round <= rounds && !DEBUG) {
+			if (round < -10) {
+				getMousePosition();
+				Thread.sleep(3000);
+				continue;
+			}
+
     		System.out.println("Start of mining round " + round + "\n");
-        	waitToMine();
+        	waitToMine(3600000);
     		clickOnMine();
-    		waitToMineFromMiningHub();
-    		clickOnMineFromMiningHub();
     		waitToClaim(land);
         	clickOnClaim();
         	waitToApproval();
-        	moveMouse(-800, 620, -1430, 630, 50);
-    		clickOnCaptcha();
-        	clickOnApproval();
-        	waitToMiningHub();
-        	waitToMiningDelay(land);
-        	//clickOnRefresh();
-        	clickOnBack();
+			clickOnApproval();
+        	// waitToRefresh();
+        	// clickOnRefresh();
 
         	System.out.println("End of mining round " + round + "\n\n");
-
-    		/*if (round == 5) {
-    			System.out.println("Round " + round + ": wait 2 minutes");
-    			Thread.sleep(120000);
-    		}*/
 
     		round++;
     	}
 
 		System.out.println("Paste download path and confirmed.");
     }
+
+	public static void getMousePosition() throws InterruptedException {
+		TimeUnit.SECONDS.sleep(1/2);
+		double mouseX = MouseInfo.getPointerInfo().getLocation().getX();
+		double mouseY = MouseInfo.getPointerInfo().getLocation().getY();
+		System.out.println("X:" + mouseX);
+		System.out.println("Y:" + mouseY);
+	}
 
     public static void moveMouse(int sx, int sy, int ex, int ey, int speed) throws AWTException {
         int a = 10;
@@ -104,14 +111,15 @@ public class App
 	private static void clickOnApproval() throws InterruptedException {
 		String message = "clickOnApproval";
 		if (IS_CHROME) {
-			click(-300, 670, message);
+			click(370, 555, message);
 		} else {
 			click(-1300, 730, message);
 		}
 	}
 
 	private static void waitToApproval() throws InterruptedException {
-		wait(8000, 12000, "waitToApproval");
+		wait(2000, 2500, "waitToApproval");
+		//wait(8000, 12000, "waitToApproval");
 	}
 
 	private static void wait(int min, int max, String message) throws InterruptedException {
@@ -122,17 +130,17 @@ public class App
 		Thread.sleep(3000);
 	}
 
-    private static void waitToMine() throws InterruptedException {
-		wait(10000,12000, "waitToMine");
+    private static void waitToMine(int delay) throws InterruptedException {
+		wait(delay, delay + (delay/10), "waitToMine");
 	}
 
     private static void waitToClaim(String land) throws InterruptedException {
     	String message = "waitToClaim " + land;
-    	if (land.equals("Active Volcano")) {
+    	if (land.equals(ACTIVE_VOLCANO)) {
     		//wait(120000, 140000, "waitToClaim " + land);
     		wait(80000, 90000, message);
 
-    	} else if (land.equals("Grassland")) {
+    	} else if (land.equals(GRASSLAND)) {
     		wait(60000, 65000, message);
 
     	} else if (land.equals(GEOTHERMAL_SPRINGS)) {
@@ -147,7 +155,13 @@ public class App
     		} else {
     			wait(60000, 65000, message);
     		}
-    	} else {
+    	} else if (land.equals(PLAINS)) {
+			if (IS_CHROME) {
+				wait(5000, 5500, message);
+			} else {
+				wait(5000, 5500, message);
+			}
+		} else {
     		wait(20000, 25000, message);
     	}
 	}
@@ -196,7 +210,7 @@ public class App
 	}
 
 	private static void clickOnMine() throws InterruptedException {
-		click(-400, 400, "clickOnMine");
+		click(1114, 169, "clickOnMine");
 	}
 
 	private static void clickOnMineFromMiningHub() throws InterruptedException {
@@ -204,11 +218,7 @@ public class App
 	}
 
 	private static void clickOnClaim() throws InterruptedException {
-		click(-800, 620, "clickOnClaim");
-	}
-
-    private static void clickOnMiningHub() throws InterruptedException {
-    	click(-1100, 800, "clickOnMiningHub");
+		click(1114, 169, "clickOnClaim");
 	}
 
 	private static void clickOnBack() throws InterruptedException {
@@ -219,6 +229,9 @@ public class App
 		click(-200, 200, "clickOnLogout");
 	}
 
+	private static void waitToRefresh() throws InterruptedException {
+		wait(6000,8000, "waitToRefresh");
+	}
 
 	private static void clickOnRefresh() throws InterruptedException {
 		click(-1520, 120, "clickOnRefresh");
